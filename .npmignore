@@ -1,0 +1,32 @@
+# Source (dist is the published artifact)
+src/
+tsconfig.json
+
+# Tests
+tests/
+**/__tests__/
+*.test.ts
+*.spec.ts
+vitest.config.*
+
+# Dev tooling
+.github/
+.vscode/
+.idea/
+.editorconfig
+
+# Git
+.git/
+.gitignore
+
+# Dev config
+.eslintrc*
+.prettierrc*
+eslint.config.*
+
+# Misc
+*.tgz
+.DS_Store
+Thumbs.db
+CONTRIBUTING.md
+CHANGELOG.md

@@ -1,0 +1,71 @@
+{
+  "name": "llm-harness",
+  "version": "0.1.0",
+  "description": "Zero-framework LLM router for Node.js — unified streaming, tool calling, and usage tracking across OpenAI, Anthropic, Google, Ollama, and any OpenAI-compatible provider.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "llm",
+    "openai",
+    "anthropic",
+    "claude",
+    "gpt",
+    "ollama",
+    "ai",
+    "router",
+    "proxy",
+    "streaming",
+    "tool-calling",
+    "function-calling",
+    "multi-provider",
+    "litellm"
+  ],
+  "author": "Brandon Korous",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brandonkorous/llm-harness.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brandonkorous/llm-harness/issues"
+  },
+  "homepage": "https://github.com/brandonkorous/llm-harness#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "openai": ">=4.0.0",
+    "@anthropic-ai/sdk": ">=0.30.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": { "optional": true },
+    "@anthropic-ai/sdk": { "optional": true }
+  },
+  "devDependencies": {
+    "openai": "^4.73.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.0",
+    "@types/node": "^22.0.0"
+  }
+}
