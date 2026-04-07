@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-04-07
+
+### Added
+
+- `streamReadable()` method on Router -- returns a Web `ReadableStream<Uint8Array>` for compatibility with Next.js Route Handlers, Hono, Cloudflare Workers, and the Fetch API
+- `toReadableStream()` standalone utility -- converts any `AsyncIterable<StreamEvent>` to a ReadableStream
+- Three serialization formats: `"json"` (NDJSON, default), `"sse"` (Server-Sent Events), `"raw"` (text deltas only)
+- `StreamFormat` and `ReadableStreamOptions` types exported
+
 ## [0.1.0] - 2026-04-06
 
 Initial release.
@@ -11,7 +20,7 @@ Initial release.
 ### Added
 
 - `createRouter()` -- main entry point for creating a multi-provider LLM router
-- Unified `complete()` and `stream()` API across all providers
+- Unified `complete()`, `stream()`, and `streamReadable()` API across all providers
 - **OpenAI provider** -- supports GPT models, o-series, and any OpenAI-compatible endpoint
 - **Anthropic provider** -- supports Claude models with native system prompt and tool calling
 - **Google provider** -- supports Gemini models via Google's OpenAI-compatible endpoint

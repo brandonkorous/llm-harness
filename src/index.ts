@@ -99,3 +99,6 @@ export { ProviderRegistry } from "./registry.js";
 
 // Retry utilities (for custom providers)
 export { withRetry, CircuitBreaker, isRetryable } from "./retry.js";
+
+// Web Streams utilities
+export { toReadableStream, type StreamFormat, type ReadableStreamOptions } from "./streams.js";

@@ -38,6 +38,7 @@ import type {
   ModelRoute,
   UsageEvent,
 } from "./types.js";
+import { toReadableStream, type ReadableStreamOptions } from "./streams.js";
 import { ProviderRegistry } from "./registry.js";
 import { createOpenAIProvider } from "./providers/openai.js";
 import { createAnthropicProvider } from "./providers/anthropic.js";
@@ -59,8 +60,10 @@ const BUILT_IN_FACTORIES: Record<string, (config: any) => any> = {
 export interface Router {
   /** Complete a request (non-streaming). Resolves model → provider automatically. */
   complete(request: CompletionRequest): Promise<CompletionResponse>;
-  /** Stream a completion. Resolves model → provider automatically. */
+  /** Stream a completion as an async generator. Resolves model → provider automatically. */
   stream(request: CompletionRequest): AsyncGenerator<StreamEvent>;
+  /** Stream a completion as a Web ReadableStream. Compatible with Response, Next.js, Hono, etc. */
+  streamReadable(request: CompletionRequest, options?: ReadableStreamOptions): ReadableStream<Uint8Array>;
   /** Access the underlying provider registry. */
   registry: ProviderRegistry;
 }
@@ -172,6 +175,10 @@ export function createRouter(config: RouterConfig): Router {
       }
 
       throw new Error(`All providers failed for model "${request.model}"`);
+    },
+
+    streamReadable(request: CompletionRequest, options?: ReadableStreamOptions): ReadableStream<Uint8Array> {
+      return toReadableStream(this.stream(request), options);
     },
 
     async *stream(request: CompletionRequest): AsyncGenerator<StreamEvent> {

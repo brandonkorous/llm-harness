@@ -17,7 +17,7 @@ If you use multiple LLM providers, you know the pain: each SDK has its own messa
 ## Features
 
 - **Unified interface** -- one `complete()` and `stream()` API for every provider
-- **Streaming via async generators** -- native `for await` over text deltas and tool call deltas
+- **Dual streaming** -- async generators for Node.js, ReadableStream for Web (Next.js, Hono, Workers)
 - **Tool calling** -- define tools once, they work across OpenAI, Anthropic, Google, and Ollama
 - **Automatic provider detection** -- route `gpt-4o` to OpenAI, `claude-sonnet-4-6` to Anthropic, `gemini-2.5-flash` to Google automatically
 - **Model aliasing** -- map friendly names to specific model IDs
@@ -79,7 +79,9 @@ Auto-detection also recognizes `mistral*`/`mixtral*`, `deepseek*`, and `command*
 
 ## Streaming
 
-Streaming returns an async generator of typed events:
+Two streaming APIs: **async generators** for Node.js control flow, and **ReadableStream** for Web-compatible responses (Next.js, Hono, Cloudflare Workers, Fetch API).
+
+### Async Generator
 
 ```typescript
 for await (const event of router.stream({
@@ -101,6 +103,38 @@ for await (const event of router.stream({
       break;
   }
 }
+```
+
+### ReadableStream (Web Streams API)
+
+Use `streamReadable()` to get a `ReadableStream<Uint8Array>` — compatible with `new Response()`, Next.js Route Handlers, Hono, and any Web Streams consumer:
+
+```typescript
+// Next.js Route Handler
+export async function POST(req: Request) {
+  const { model, messages } = await req.json();
+
+  return new Response(
+    router.streamReadable({ model, messages }, { format: 'sse' }),
+    { headers: { 'Content-Type': 'text/event-stream' } },
+  );
+}
+```
+
+Three serialization formats:
+
+| Format | Content-Type | Description |
+|--------|-------------|-------------|
+| `"json"` | `application/x-ndjson` | One JSON object per line (NDJSON). Default. |
+| `"sse"` | `text/event-stream` | Server-Sent Events (`event: type\ndata: ...\n\n`). |
+| `"raw"` | `text/plain` | Only text deltas as raw UTF-8 (no framing, no tool calls). |
+
+You can also convert any async generator with the standalone `toReadableStream` utility:
+
+```typescript
+import { toReadableStream } from 'llm-harness';
+
+const readable = toReadableStream(router.stream({ model, messages }), { format: 'sse' });
 ```
 
 Stream events:
@@ -294,7 +328,8 @@ Creates a router instance.
 | Method | Description |
 |--------|-------------|
 | `complete(request)` | Non-streaming completion. Returns `Promise<CompletionResponse>` |
-| `stream(request)` | Streaming completion. Returns `AsyncGenerator<StreamEvent>` |
+| `stream(request)` | Streaming via async generator. Returns `AsyncGenerator<StreamEvent>` |
+| `streamReadable(request, options?)` | Streaming via Web ReadableStream. Returns `ReadableStream<Uint8Array>` |
 | `registry` | Access the underlying `ProviderRegistry` |
 
 **CompletionRequest:**
@@ -330,6 +365,9 @@ import {
   withRetry,
   CircuitBreaker,
   isRetryable,
+
+  // Web Streams
+  toReadableStream,
 } from 'llm-harness';
 ```
 
@@ -339,7 +377,7 @@ import {
 |---|---|---|---|
 | Language | TypeScript / Node.js | Python | TypeScript |
 | Framework required | None | None | None (but React-oriented) |
-| Streaming | Async generators | Sync/async generators | ReadableStream |
+| Streaming | Async generators + ReadableStream | Sync/async generators | ReadableStream |
 | Tool calling | Unified across providers | Unified across providers | Unified across providers |
 | Provider SDKs | Optional peer deps, lazy-loaded | Bundled | Bundled |
 | Failover | Built-in with circuit breaker | Built-in | Manual |
