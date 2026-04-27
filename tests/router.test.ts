@@ -70,10 +70,11 @@ function buildRouterWith(
   // then overwrite the registry with our fakes. The built-in OpenAI adapter
   // is lazy (no network) so registering it is harmless.
   const router = createRouter({
-    providers: Object.fromEntries(
-      providers.map((p) => [p.id, { apiKey: "test" }]),
-    ),
     ...extra,
+    providers: {
+      ...Object.fromEntries(providers.map((p) => [p.id, { apiKey: "test" }])),
+      ...extra.providers,
+    },
   });
   for (const p of providers) {
     router.registry.registerInstance(p);
@@ -212,6 +213,22 @@ describe("createRouter.complete", () => {
         messages: [{ role: "user", content: "hi" }],
       }),
     ).rejects.toThrow(/No providers registered/);
+  });
+
+  it("forwards responseFormat to the resolved provider", async () => {
+    const openai = fakeProvider({ id: "openai" });
+    const router = buildRouterWith([openai], {
+      providers: { openai: { apiKey: "x" } },
+      models: { gpt: "openai" },
+    });
+
+    await router.complete({
+      model: "gpt",
+      messages: [{ role: "user", content: "give me JSON" }],
+      responseFormat: "json_object",
+    });
+
+    expect(openai.completeCalls[0].responseFormat).toBe("json_object");
   });
 });
 

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-04-27
+
+### Added
+
+- `responseFormat` field on `CompletionRequest` -- accepts `"text"` (default) or `"json_object"` to constrain the model to emit a single valid JSON object
+- OpenAI provider forwards `responseFormat: "json_object"` natively as `response_format: { type: "json_object" }` in both `complete()` and `stream()`
+- Anthropic provider implements JSON mode by appending a JSON-only instruction to the system prompt (the Anthropic API has no native equivalent flag)
+- Google and Ollama providers forward `responseFormat` to their OpenAI-compatible endpoints automatically
+
+### Backward compatibility
+
+Fully backward compatible. `responseFormat` is optional; existing calls behave unchanged when it is omitted.
+
 ## [0.1.1] - 2026-04-07
 
 ### Added

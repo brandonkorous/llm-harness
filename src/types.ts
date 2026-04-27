@@ -95,6 +95,16 @@ export interface CompletionRequest {
   stop?: string[];
   /** Whether to stream the response. */
   stream?: boolean;
+  /**
+   * Constrain the model to emit a specific output format.
+   * - `"text"` (default): free-form text.
+   * - `"json_object"`: a single valid JSON object. OpenAI uses native JSON
+   *   mode; Anthropic injects an instruction into the system prompt because
+   *   the API has no native equivalent. Callers should still describe the
+   *   expected shape in their prompt — the format constraint only ensures
+   *   the response is parseable, not that it matches a specific schema.
+   */
+  responseFormat?: "text" | "json_object";
   /** Arbitrary metadata passed to the provider (e.g., for tracking). */
   metadata?: Record<string, unknown>;
 }

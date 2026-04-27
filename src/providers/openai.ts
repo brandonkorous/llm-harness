@@ -132,6 +132,9 @@ export function createOpenAIProvider(
         temperature: request.temperature,
         top_p: request.topP,
         stop: request.stop,
+        ...(request.responseFormat === "json_object"
+          ? { response_format: { type: "json_object" } }
+          : {}),
         ...(request.metadata ? { metadata: request.metadata } : {}),
       });
 
@@ -177,6 +180,9 @@ export function createOpenAIProvider(
         stop: request.stop,
         stream: true,
         stream_options: { include_usage: true },
+        ...(request.responseFormat === "json_object"
+          ? { response_format: { type: "json_object" } }
+          : {}),
         ...(request.metadata ? { metadata: request.metadata } : {}),
       });
 

@@ -195,6 +195,37 @@ console.log(followUp.text);  // "The weather in Tokyo is sunny and 22 degrees...
 console.log(followUp.done);  // true
 ```
 
+## Structured Output (JSON mode)
+
+Set `responseFormat: 'json_object'` to constrain the model to emit a single valid JSON object. Useful when you need to `JSON.parse()` the response without defensive extraction.
+
+```typescript
+const result = await router.complete({
+  model: 'gpt-5.4-nano',
+  messages: [
+    { role: 'user', content: 'Extract the title and priority. Respond as {"title": ..., "priority": ...}.' },
+  ],
+  responseFormat: 'json_object',
+});
+
+const parsed = JSON.parse(result.text);  // safe — guaranteed parseable JSON
+```
+
+**Provider behavior:**
+
+| Provider | Implementation |
+|----------|---------------|
+| OpenAI | Native `response_format: { type: 'json_object' }` |
+| Anthropic | Appends a JSON-only instruction to the system prompt (no native flag exists in the API) |
+| Google | Forwarded as `response_format` to the OpenAI-compatible endpoint — honored where Gemini supports it; ignored otherwise |
+| Ollama | Forwarded as `response_format` to the OpenAI-compatible endpoint — model-dependent |
+
+**Notes:**
+
+- Always describe the expected JSON shape in your prompt. `responseFormat` only constrains *parseability*, not schema.
+- For OpenAI, the documented requirement that the prompt contain the word "JSON" still applies — the model will refuse otherwise. Including a JSON example in the system prompt is the safest pattern.
+- For Anthropic, the appended instruction takes precedence over earlier conflicting guidance, but Claude is not bound by an API-level constraint — extremely adversarial prompts can still produce non-JSON output. Pair with try/catch.
+
 ## Failover and Retry
 
 Configure fallback providers and retry behavior:
@@ -344,6 +375,7 @@ Creates a router instance.
 | `temperature` | `number` | Sampling temperature (0-2) |
 | `topP` | `number` | Top-p nucleus sampling |
 | `stop` | `string[]` | Stop sequences |
+| `responseFormat` | `"text" \| "json_object"` | Constrain output to a single valid JSON object. See [Structured Output](#structured-output-json-mode) |
 | `metadata` | `Record<string, unknown>` | Arbitrary metadata (passed through to `onUsage`) |
 
 ### Advanced Exports

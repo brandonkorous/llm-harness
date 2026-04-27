@@ -110,6 +110,23 @@ function extractSystem(
   return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
 
+// Anthropic has no native JSON-mode flag (unlike OpenAI's response_format).
+// The official guidance is to instruct the model in the system prompt and
+// rely on Claude's strong instruction-following. Appended at the end so it
+// takes precedence over any conflicting earlier guidance.
+const JSON_MODE_INSTRUCTION =
+  "You must respond with a single valid JSON object and nothing else. " +
+  "Do not include any prose, explanation, or commentary before or after the JSON. " +
+  "Do not wrap the JSON in markdown code fences.";
+
+function withJsonModeInstruction(
+  system: string | undefined,
+  responseFormat: CompletionRequest["responseFormat"],
+): string | undefined {
+  if (responseFormat !== "json_object") return system;
+  return system ? `${system}\n\n${JSON_MODE_INSTRUCTION}` : JSON_MODE_INSTRUCTION;
+}
+
 export function createAnthropicProvider(
   config: ProviderConfig,
 ): LLMProvider {
@@ -131,7 +148,10 @@ export function createAnthropicProvider(
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
       const c = await getClient();
       const model = request.model;
-      const system = extractSystem(request.messages, request.system);
+      const system = withJsonModeInstruction(
+        extractSystem(request.messages, request.system),
+        request.responseFormat,
+      );
 
       const response = await (c.messages.create as Function)({
         model,
@@ -179,7 +199,10 @@ export function createAnthropicProvider(
     async *stream(request: CompletionRequest): AsyncGenerator<StreamEvent> {
       const c = await getClient();
       const model = request.model;
-      const system = extractSystem(request.messages, request.system);
+      const system = withJsonModeInstruction(
+        extractSystem(request.messages, request.system),
+        request.responseFormat,
+      );
 
       const stream = (c.messages.stream as Function)({
         model,
