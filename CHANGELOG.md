@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-05-15
+
+### Docs
+
+- README features list now mentions document inputs and prompt caching.
+- Providers table gains "Documents" and "Prompt cache" columns so the per-provider support matrix is visible at a glance.
+
+No code changes — this release exists so the npm landing page reflects the 0.3.0 capabilities.
+
 ## [0.3.0] - 2026-05-14
 
 ### Added
