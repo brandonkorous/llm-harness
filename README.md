@@ -19,6 +19,8 @@ If you use multiple LLM providers, you know the pain: each SDK has its own messa
 - **Unified interface** -- one `complete()` and `stream()` API for every provider
 - **Dual streaming** -- async generators for Node.js, ReadableStream for Web (Next.js, Hono, Workers)
 - **Tool calling** -- define tools once, they work across OpenAI, Anthropic, Google, and Ollama
+- **Document inputs (PDFs)** -- attach files via `document` content blocks; Anthropic handles natively, OpenAI is routed to the Responses API automatically
+- **Prompt caching** -- opt-in `cacheable` flag for system prompts; cache-token usage surfaced in `Usage.cacheReadTokens` / `cacheCreationTokens`
 - **Automatic provider detection** -- route `gpt-4o` to OpenAI, `claude-sonnet-4-6` to Anthropic, `gemini-2.5-flash` to Google automatically
 - **Model aliasing** -- map friendly names to specific model IDs
 - **Failover chains** -- define fallback providers, tried in order when the primary fails
@@ -65,13 +67,13 @@ console.log(result.usage);
 
 ## Providers
 
-| Provider | SDK Required | Auto-detected Patterns | Notes |
-|----------|-------------|----------------------|-------|
-| OpenAI | `openai` | `gpt*`, `o1*`, `chatgpt*`, `openai/*` | Default for unknown providers |
-| Anthropic | `@anthropic-ai/sdk` | `claude*`, `anthropic/*` | System prompt handled natively |
-| Google | `openai` | `gemini*`, `google/*` | Uses Google's OpenAI-compatible endpoint |
-| Ollama | `openai` | `llama*`, `meta/*`, `ollama/*` | Defaults to `localhost:11434/v1` |
-| Any OpenAI-compatible | `openai` | -- | Pass custom `baseUrl` |
+| Provider | SDK Required | Auto-detected Patterns | Documents | Prompt cache | Notes |
+|----------|-------------|----------------------|-----------|--------------|-------|
+| OpenAI | `openai` | `gpt*`, `o1*`, `chatgpt*`, `openai/*` | Responses API only (`gpt-5.x`, `gpt-4o`, `gpt-4.1`, `o*`) | Automatic, `cacheReadTokens` surfaced | Default for unknown providers |
+| Anthropic | `@anthropic-ai/sdk` | `claude*`, `anthropic/*` | Native `document` block | Opt-in via `cacheable: true` | System prompt handled natively |
+| Google | `openai` | `gemini*`, `google/*` | Not yet supported | n/a | Uses Google's OpenAI-compatible endpoint |
+| Ollama | `openai` | `llama*`, `meta/*`, `ollama/*` | Not yet supported | n/a | Defaults to `localhost:11434/v1` |
+| Any OpenAI-compatible | `openai` | -- | Provider-dependent | Provider-dependent | Pass custom `baseUrl` |
 
 Google and Ollama both use the OpenAI SDK under the hood via their OpenAI-compatible endpoints, so you only need `openai` installed for those.
 
