@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-05-14
+
+### Added
+
+- `DocumentContent` content block on `ContentBlock` — carries a PDF (or other document) by `base64`, `url`, or `file_id`. Anthropic translates it to a native `document` block. OpenAI routes the request to the Responses API and emits an `input_file` content part.
+- `cacheable` flag on `CompletionRequest` — opt-in prompt caching for the system prompt. On Anthropic, this sends the system prompt as a `text` block with `cache_control: { type: "ephemeral" }`. On OpenAI, prompt caching is automatic on supported models and the flag is a no-op (kept for a unified contract).
+- `Usage.cacheReadTokens` and `Usage.cacheCreationTokens` — cache token surfacing. Wired from Anthropic's `cache_read_input_tokens` / `cache_creation_input_tokens`, and from OpenAI's `prompt_tokens_details.cached_tokens` (Chat Completions) and `input_tokens_details.cached_tokens` (Responses API). `cacheCreationTokens` is Anthropic-only.
+
+### Changed
+
+- OpenAI provider transparently switches to the Responses API when any message contains a `DocumentContent` block. Legacy Chat Completions models throw a descriptive error (`Provider 'openai' model '<id>' does not support document inputs; use a model on the Responses API (gpt-5.x, gpt-4o, gpt-4.1).`).
+
+### Not yet supported
+
+- Streaming document inputs on OpenAI (use `complete()`).
+- Document inputs on Google and Ollama.
+- Structured outputs via `json_schema` strict mode and audio inputs.
+
+### Backward compatibility
+
+Additive. `DocumentContent` extends `ContentBlock`, `cacheable` is optional, and the new `Usage` fields are optional. Existing calls behave unchanged.
+
 ## [0.2.0] - 2026-04-27
 
 ### Added

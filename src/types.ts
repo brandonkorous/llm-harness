@@ -46,7 +46,31 @@ export interface ToolResultContent {
   isError?: boolean;
 }
 
-export type ContentBlock = TextContent | ToolUseContent | ToolResultContent;
+/**
+ * A document (typically a PDF) attached to a message.
+ *
+ * Anthropic accepts all three source variants natively as `document` blocks.
+ * OpenAI accepts them only on the Responses API (`input_file` content parts).
+ * Providers that do not support documents will throw a descriptive error.
+ *
+ * Size limits are provider-enforced — OpenAI is 50 MB per file; Anthropic is
+ * 32 MB and 100 pages for inline `base64` and url documents.
+ */
+export interface DocumentContent {
+  type: "document";
+  source:
+    | { type: "base64"; mediaType: string; data: string }
+    | { type: "url"; url: string }
+    | { type: "file_id"; fileId: string };
+  /** Optional filename hint — used by OpenAI's `input_file` block. */
+  filename?: string;
+}
+
+export type ContentBlock =
+  | TextContent
+  | ToolUseContent
+  | ToolResultContent
+  | DocumentContent;
 
 export interface Message {
   role: MessageRole;
@@ -105,6 +129,20 @@ export interface CompletionRequest {
    *   the response is parseable, not that it matches a specific schema.
    */
   responseFormat?: "text" | "json_object";
+  /**
+   * Opt in to provider-side prompt caching for the system prompt.
+   *
+   * Anthropic: adds `cache_control: {type: 'ephemeral'}` to the system block.
+   *   The minimum cacheable size is ~1024 tokens — smaller prompts will not
+   *   produce a cache hit even with the flag set, so callers should only
+   *   enable this when the system prompt is substantial and reused.
+   *
+   * OpenAI: cache hits are automatic on supported models; this flag has no
+   *   effect (kept here for a unified contract).
+   *
+   * Default: false.
+   */
+  cacheable?: boolean;
   /** Arbitrary metadata passed to the provider (e.g., for tracking). */
   metadata?: Record<string, unknown>;
 }
@@ -121,6 +159,24 @@ export interface Usage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /**
+   * Tokens served from the provider's prompt cache.
+   *
+   * - Anthropic: `usage.cache_read_input_tokens`
+   * - OpenAI:    `usage.prompt_tokens_details.cached_tokens`
+   *              (or `usage.input_tokens_details.cached_tokens` for the
+   *              Responses API)
+   *
+   * Undefined when the provider did not report cache usage.
+   */
+  cacheReadTokens?: number;
+  /**
+   * Tokens written to the cache on this request.
+   *
+   * - Anthropic: `usage.cache_creation_input_tokens`
+   * - OpenAI:    not reported separately — always undefined.
+   */
+  cacheCreationTokens?: number;
 }
 
 export interface CompletionResponse {

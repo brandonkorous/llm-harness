@@ -1,6 +1,6 @@
 {
   "name": "llm-harness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Zero-framework LLM router for Node.js — unified streaming, tool calling, and usage tracking across OpenAI, Anthropic, Google, Ollama, and any OpenAI-compatible provider.",
   "type": "module",
   "main": "dist/index.js",

@@ -226,6 +226,92 @@ const parsed = JSON.parse(result.text);  // safe — guaranteed parseable JSON
 - For OpenAI, the documented requirement that the prompt contain the word "JSON" still applies — the model will refuse otherwise. Including a JSON example in the system prompt is the safest pattern.
 - For Anthropic, the appended instruction takes precedence over earlier conflicting guidance, but Claude is not bound by an API-level constraint — extremely adversarial prompts can still produce non-JSON output. Pair with try/catch.
 
+## Document Inputs (PDFs)
+
+Attach a PDF (or other document) to a message via a `document` content block. Anthropic accepts these natively; OpenAI routes them through the Responses API automatically.
+
+```typescript
+import { readFileSync } from 'node:fs';
+
+const pdf = readFileSync('./resume.pdf').toString('base64');
+
+const result = await router.complete({
+  model: 'claude-sonnet-4-6',  // or 'gpt-4.1' / 'gpt-4o' / 'gpt-5.x'
+  system: 'Extract the candidate\'s name, email, and most recent job title as JSON.',
+  responseFormat: 'json_object',
+  messages: [{
+    role: 'user',
+    content: [
+      { type: 'text', text: 'Parse the attached resume.' },
+      {
+        type: 'document',
+        source: { type: 'base64', mediaType: 'application/pdf', data: pdf },
+        filename: 'resume.pdf',
+      },
+    ],
+  }],
+});
+
+console.log(JSON.parse(result.text));
+```
+
+Three source variants are supported:
+
+| Source | Anthropic | OpenAI (Responses) |
+|--------|-----------|--------------------|
+| `{ type: 'base64', mediaType, data }` | `document` / `base64` | `input_file` with `file_data` (data URL) |
+| `{ type: 'url', url }`                | `document` / `url`    | `input_file` with `file_url` |
+| `{ type: 'file_id', fileId }`         | `document` / `file`   | `input_file` with `file_id` |
+
+**Notes:**
+
+- OpenAI's per-file limit is 50 MB. Anthropic's limit is 32 MB and 100 pages for `base64` and `url` documents.
+- Document inputs on OpenAI require a Responses-API-capable model (`gpt-5.x`, `gpt-4o`, `gpt-4.1`, `o1`/`o3`/`o4`). Legacy models throw `Provider 'openai' model '<id>' does not support document inputs; use a model on the Responses API ...`.
+- Streaming document inputs is not yet supported on OpenAI — use `complete()`.
+- Google and Ollama do not yet accept document blocks.
+
+## Prompt Caching
+
+Set `cacheable: true` to opt into provider-side caching of the system prompt. Useful when the same large system prompt is reused across many requests.
+
+```typescript
+const result = await router.complete({
+  model: 'claude-sonnet-4-6',
+  system: longExtractionRubric,  // > 1024 tokens for a cache hit on Anthropic
+  cacheable: true,
+  messages: [{ role: 'user', content: 'Parse this.' }],
+});
+
+console.log(result.usage);
+// => {
+//   inputTokens: 12000,
+//   outputTokens: 240,
+//   totalTokens: 12240,
+//   cacheReadTokens: 11800,     // bills at the cache-read rate
+//   cacheCreationTokens: 0,     // 0 once the entry is warm
+// }
+```
+
+**Provider behavior:**
+
+| Provider | Implementation |
+|----------|----------------|
+| Anthropic | Sends the system prompt as a `text` block with `cache_control: { type: 'ephemeral' }`. Cache TTL is ~5 minutes. Minimum cacheable size is ~1024 tokens. |
+| OpenAI | Prompt caching is automatic on supported models — the flag is a no-op. `usage.prompt_tokens_details.cached_tokens` is surfaced as `cacheReadTokens` regardless. |
+| Google / Ollama | Flag is a no-op. |
+
+`Usage` now exposes:
+
+```typescript
+interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheReadTokens?: number;      // Anthropic cache_read_input_tokens / OpenAI cached_tokens
+  cacheCreationTokens?: number;  // Anthropic cache_creation_input_tokens (Anthropic only)
+}
+```
+
 ## Failover and Retry
 
 Configure fallback providers and retry behavior:
@@ -285,6 +371,8 @@ interface UsageEvent {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
   };
   durationMs: number;
   success: boolean;
@@ -376,6 +464,7 @@ Creates a router instance.
 | `topP` | `number` | Top-p nucleus sampling |
 | `stop` | `string[]` | Stop sequences |
 | `responseFormat` | `"text" \| "json_object"` | Constrain output to a single valid JSON object. See [Structured Output](#structured-output-json-mode) |
+| `cacheable` | `boolean` | Opt in to provider-side caching of the system prompt. See [Prompt Caching](#prompt-caching) |
 | `metadata` | `Record<string, unknown>` | Arbitrary metadata (passed through to `onUsage`) |
 
 ### Advanced Exports

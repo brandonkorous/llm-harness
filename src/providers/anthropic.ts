@@ -15,6 +15,7 @@ import type {
   ToolCall,
   Usage,
   ToolDefinition,
+  DocumentContent,
 } from "../types.js";
 
 type AnthropicModule = typeof import("@anthropic-ai/sdk");
@@ -45,6 +46,31 @@ function toAnthropicTools(tools?: ToolDefinition[]) {
   }));
 }
 
+/** Convert a document content block to Anthropic's `document` block shape. */
+function toAnthropicDocument(doc: DocumentContent): Record<string, unknown> {
+  if (doc.source.type === "base64") {
+    return {
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: doc.source.mediaType,
+        data: doc.source.data,
+      },
+    };
+  }
+  if (doc.source.type === "url") {
+    return {
+      type: "document",
+      source: { type: "url", url: doc.source.url },
+    };
+  }
+  // file_id
+  return {
+    type: "document",
+    source: { type: "file", file_id: doc.source.fileId },
+  };
+}
+
 /** Convert our messages to Anthropic format (system is separate). */
 function toAnthropicMessages(messages: CompletionRequest["messages"]) {
   const result: Record<string, unknown>[] = [];
@@ -68,25 +94,38 @@ function toAnthropicMessages(messages: CompletionRequest["messages"]) {
       const blocks: Record<string, unknown>[] = [];
       for (const b of msg.content) {
         if (b.type === "text") {
-          blocks.push({ type: "text", text: (b as { text: string }).text });
+          blocks.push({ type: "text", text: b.text });
         } else if (b.type === "tool_use") {
-          const tu = b as { id: string; name: string; arguments: Record<string, unknown> };
           blocks.push({
             type: "tool_use",
-            id: tu.id,
-            name: tu.name,
-            input: tu.arguments,
+            id: b.id,
+            name: b.name,
+            input: b.arguments,
           });
         }
+        // tool_result and document blocks are not valid on assistant turns.
       }
       result.push({ role: "assistant", content: blocks });
+    } else if (Array.isArray(msg.content)) {
+      const blocks: Record<string, unknown>[] = [];
+      for (const b of msg.content) {
+        if (b.type === "text") {
+          blocks.push({ type: "text", text: b.text });
+        } else if (b.type === "document") {
+          blocks.push(toAnthropicDocument(b));
+        } else if (b.type === "tool_result") {
+          blocks.push({
+            type: "tool_result",
+            tool_use_id: b.toolCallId,
+            content: b.content,
+            ...(b.isError ? { is_error: true } : {}),
+          });
+        }
+        // tool_use is not valid on user turns.
+      }
+      result.push({ role: msg.role, content: blocks });
     } else {
-      result.push({
-        role: msg.role,
-        content: typeof msg.content === "string"
-          ? msg.content
-          : msg.content.map((b) => ({ type: "text", text: (b as { text: string }).text })),
-      });
+      result.push({ role: msg.role, content: msg.content });
     }
   }
 
@@ -127,6 +166,52 @@ function withJsonModeInstruction(
   return system ? `${system}\n\n${JSON_MODE_INSTRUCTION}` : JSON_MODE_INSTRUCTION;
 }
 
+/**
+ * Build the Anthropic `system` parameter.
+ *
+ * When `cacheable` is true, the system prompt is sent as a single text block
+ * with `cache_control: { type: "ephemeral" }` so Anthropic will reuse a cache
+ * entry on subsequent requests with the same prefix. Otherwise we pass the
+ * raw string so the request shape stays backward compatible.
+ */
+function buildSystemParam(
+  system: string | undefined,
+  cacheable: boolean | undefined,
+): string | Record<string, unknown>[] | undefined {
+  if (!system) return undefined;
+  if (!cacheable) return system;
+  return [
+    {
+      type: "text",
+      text: system,
+      cache_control: { type: "ephemeral" },
+    },
+  ];
+}
+
+/** Build a unified `Usage` from Anthropic's response.usage shape. */
+function toUsage(raw: {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+} | undefined): Usage {
+  const inputTokens = raw?.input_tokens ?? 0;
+  const outputTokens = raw?.output_tokens ?? 0;
+  const usage: Usage = {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+  };
+  if (typeof raw?.cache_read_input_tokens === "number") {
+    usage.cacheReadTokens = raw.cache_read_input_tokens;
+  }
+  if (typeof raw?.cache_creation_input_tokens === "number") {
+    usage.cacheCreationTokens = raw.cache_creation_input_tokens;
+  }
+  return usage;
+}
+
 export function createAnthropicProvider(
   config: ProviderConfig,
 ): LLMProvider {
@@ -148,9 +233,12 @@ export function createAnthropicProvider(
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
       const c = await getClient();
       const model = request.model;
-      const system = withJsonModeInstruction(
-        extractSystem(request.messages, request.system),
-        request.responseFormat,
+      const system = buildSystemParam(
+        withJsonModeInstruction(
+          extractSystem(request.messages, request.system),
+          request.responseFormat,
+        ),
+        request.cacheable,
       );
 
       const response = await (c.messages.create as Function)({
@@ -179,17 +267,11 @@ export function createAnthropicProvider(
         }
       }
 
-      const usage: Usage = {
-        inputTokens: response.usage?.input_tokens || 0,
-        outputTokens: response.usage?.output_tokens || 0,
-        totalTokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
-      };
-
       return {
         text,
         toolCalls,
         done: toolCalls.length === 0,
-        usage,
+        usage: toUsage(response.usage),
         providerId: "anthropic",
         model,
         finishReason: response.stop_reason,
@@ -199,9 +281,12 @@ export function createAnthropicProvider(
     async *stream(request: CompletionRequest): AsyncGenerator<StreamEvent> {
       const c = await getClient();
       const model = request.model;
-      const system = withJsonModeInstruction(
-        extractSystem(request.messages, request.system),
-        request.responseFormat,
+      const system = buildSystemParam(
+        withJsonModeInstruction(
+          extractSystem(request.messages, request.system),
+          request.responseFormat,
+        ),
+        request.cacheable,
       );
 
       const stream = (c.messages.stream as Function)({
@@ -274,10 +359,18 @@ export function createAnthropicProvider(
             case "message_delta": {
               finishReason = event.delta?.stop_reason;
               if (event.usage) {
+                const outputTokens = event.usage.output_tokens || 0;
+                const inputTokens = usage?.inputTokens ?? 0;
                 usage = {
-                  inputTokens: usage?.inputTokens || 0,
-                  outputTokens: event.usage.output_tokens || 0,
-                  totalTokens: (usage?.inputTokens || 0) + (event.usage.output_tokens || 0),
+                  inputTokens,
+                  outputTokens,
+                  totalTokens: inputTokens + outputTokens,
+                  ...(usage?.cacheReadTokens !== undefined
+                    ? { cacheReadTokens: usage.cacheReadTokens }
+                    : {}),
+                  ...(usage?.cacheCreationTokens !== undefined
+                    ? { cacheCreationTokens: usage.cacheCreationTokens }
+                    : {}),
                 };
               }
               break;
@@ -285,11 +378,7 @@ export function createAnthropicProvider(
 
             case "message_start": {
               if (event.message?.usage) {
-                usage = {
-                  inputTokens: event.message.usage.input_tokens || 0,
-                  outputTokens: 0,
-                  totalTokens: event.message.usage.input_tokens || 0,
-                };
+                usage = toUsage(event.message.usage);
               }
               break;
             }
